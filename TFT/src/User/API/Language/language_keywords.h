@@ -289,9 +289,12 @@ extern "C" {
 #define LANG_KEY_LOAD_STARTED                 "label_load_started:"
 #define LANG_KEY_UNLOAD_STARTED               "label_unload_started:"
 #define LANG_KEY_HEATERS_ON                   "label_heaters_on:"
-#define LANG_KEY_PRINT_TOTAL_TIME             "print_total_time:"
-#define LANG_KEY_PRINT_FILAMENT_USED          "print_filament_used:"
-#define LANG_KEY_PRINT_SUMMARY                "print_summary:"
+#define LANG_KEY_PRINT_SUMMARY_POPUP          "label_print_summary_popup:"
+#define LANG_KEY_PRINT_SUMMARY                "label_print_summary:"
+#define LANG_KEY_PRINT_COMPLETE               "label_print_complete:"
+#define LANG_KEY_EXT_TEMPLOW                  "label_ext_templow:"
+#define LANG_KEY_COLD_EXT                     "label_cold_ext:"
+
 #ifdef __cplusplus
 }
 #endif

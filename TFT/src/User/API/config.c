@@ -960,13 +960,12 @@ void parseConfigKey(u16 index)
 #ifdef PS_ON_PIN
 
   case C_INDEX_PS_ON:
-    if (config_int() == 1)
-      infoSettings.auto_off = 1;
-    else if(config_int() == 2)
-      infoSettings.auto_off = 2;
-    else
-      infoSettings.auto_off = 0;
-    break;
+    {
+      u8 i = config_int();
+      if (inLimit(i,0,2))
+        infoSettings.auto_off = i;
+      break;
+    }
 
   case C_INDEX_PS_LOGIC:
       infoSettings.powerloss_invert = getOnOff();
@@ -1006,8 +1005,12 @@ void parseConfigKey(u16 index)
 
 #ifdef FIL_RUNOUT_PIN
   case C_INDEX_RUNOUT:
-      infoSettings.runout = getOnOff();
-    break;
+    {
+      u8 i = config_int();
+      if (inLimit(i,0,2))
+        infoSettings.runout = i;
+      break;
+    }
 
   case C_INDEX_RUNOUT_LOGIC:
       infoSettings.runout_invert = getOnOff();
@@ -1026,24 +1029,15 @@ void parseConfigKey(u16 index)
   //---------------------------------------------------------other device specific settings
 #ifdef BUZZER_PIN
   case C_INDEX_TOUCH_SOUND:
-    if (inLimit(config_int(),0,1))
-      {
-        infoSettings.touchSound = config_int();
-      }
+        infoSettings.touchSound = getOnOff();
     break;
 
   case C_INDEX_TOAST_SOUND:
-    if (inLimit(config_int(),0,1))
-      {
-        infoSettings.toastSound = config_int();
-      }
+        infoSettings.toastSound = getOnOff();
     break;
 
   case C_INDEX_ALERT_SOUND:
-    if (inLimit(config_int(),0,1))
-      {
-        infoSettings.alertSound = config_int();
-      }
+        infoSettings.alertSound = getOnOff();
     break;
 #endif
 
