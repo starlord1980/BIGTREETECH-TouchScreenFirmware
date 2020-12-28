@@ -21,11 +21,11 @@ enum
 // Config version support
 // change if new elements/keywords are added/removed/changed in the configuration.h Format YYYYMMDD
 // this number should match the CONFIG_VERSION in configuration.h
-#define CONFIG_SUPPPORT 20200810
+#define CONFIG_SUPPPORT 20201218
 
 #define FONT_FLASH_SIGN       20200908 //(YYYYMMDD) change if fonts require updating
-#define CONFIG_FLASH_SIGN     20200908 //(YYYYMMDD) change if any keyword(s) in config.ini is added or removed
-#define LANGUAGE_FLASH_SIGN   20201007 //(YYYYMMDD) change if any keyword(s) in language pack is added or removed
+#define CONFIG_FLASH_SIGN     20201221 //(YYYYMMDD) change if any keyword(s) in config.ini is added or removed
+#define LANGUAGE_FLASH_SIGN   20201218 //(YYYYMMDD) change if any keyword(s) in language pack is added or removed
 #define ICON_FLASH_SIGN       20201028 //(YYYYMMDD) change if any icon(s) is added or removed
 
 #define FONT_CHECK_SIGN       (FONT_FLASH_SIGN + WORD_UNICODE)
@@ -89,14 +89,14 @@ typedef struct
   uint16_t mesh_min_color;
   uint16_t mesh_max_color;
 
-  uint8_t  rotate_ui;
-  uint8_t  terminalACK;
-  uint8_t  invert_axis[AXIS_NUM];
-  uint8_t  persistent_info;
-  uint8_t  file_listmode;
-  uint8_t  ack_notification;
+  uint8_t rotate_ui;
+  uint8_t terminalACK;
+  uint8_t invert_axis[AXIS_NUM];
+  uint8_t persistent_info;
+  uint8_t file_listmode;
+  uint8_t ack_notification;
 
-// Marlin Mode Settings
+  // Marlin Mode Settings
   uint8_t  mode;
   uint8_t  serial_alwaysOn;
   uint16_t marlin_mode_bg_color;
@@ -112,11 +112,11 @@ typedef struct
   uint8_t  ext_count;
   uint8_t  fan_count;
   uint8_t  fan_ctrl_count;
-  uint16_t max_temp[MAX_HEATER_COUNT];           // chamber + bed + hotend
+  uint16_t max_temp[MAX_HEATER_COUNT];  // chamber + bed + hotend
   uint16_t min_ext_temp;
   uint8_t  fan_max[MAX_FAN_COUNT];
-  int16_t  machine_size_min[AXIS_NUM];           // X, Y, Z
-  int16_t  machine_size_max[AXIS_NUM];           // X, Y, Z
+  int16_t  machine_size_min[AXIS_NUM];  // X, Y, Z
+  int16_t  machine_size_max[AXIS_NUM];  // X, Y, Z
   uint16_t axis_speed[SPEED_COUNT];
   uint16_t ext_speed[SPEED_COUNT];
   uint8_t  auto_load_leveling;
@@ -127,17 +127,17 @@ typedef struct
   uint8_t  fan_percentage;
   float    pause_retract_len;
   float    resume_purge_len;
-  float    pause_pos[AXIS_NUM-1];                // X, Y
+  float    pause_pos[AXIS_NUM-1];  // X, Y
   float    pause_z_raise;
-  uint16_t pause_feedrate[TOTAL_AXIS];           // X, Y, Z, E
+  uint16_t pause_feedrate[TOTAL_AXIS];  // X, Y, Z, E
   uint8_t  level_edge;
   float    level_z_pos;
   float    level_z_raise;
-  uint16_t level_feedrate[AXIS_NUM];             // X, Y, Z
+  uint16_t level_feedrate[AXIS_NUM];  // X, Y, Z
   uint16_t preheat_temp[PREHEAT_COUNT];
   uint16_t preheat_bed[PREHEAT_COUNT];
 
-  uint8_t  move_speed;                           // index on infoSettings.axis_speed, infoSettings.ext_speed
+  uint8_t  move_speed;  // index on infoSettings.axis_speed, infoSettings.ext_speed
 
 // Power Supply Settings
   uint8_t  auto_off;
@@ -166,7 +166,7 @@ typedef struct
   uint8_t  lcd_brightness;
   uint8_t  lcd_idle_brightness;
   uint8_t  lcd_idle_timer;
-  uint8_t  print_summary;
+  uint8_t  xy_offset_probing;
 
 // Start, End & Cancel G-codes
   uint8_t  send_start_gcode;

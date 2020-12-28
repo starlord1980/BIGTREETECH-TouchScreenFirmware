@@ -103,7 +103,7 @@ void infoSettingsReset(void)
   infoSettings.lcd_brightness         = DEFAULT_LCD_BRIGHTNESS;
   infoSettings.lcd_idle_brightness    = DEFAULT_LCD_IDLE_BRIGHTNESS;
   infoSettings.lcd_idle_timer         = DEFAULT_LCD_IDLE_TIMER;
-  infoSettings.print_summary          = DISPLAY_PRINT_SUMMARY;
+  infoSettings.xy_offset_probing      = ENABLED;
 
 // Start, End & Cancel G-codes
   infoSettings.send_start_gcode       = DISABLED;
@@ -148,7 +148,8 @@ void infoSettingsReset(void)
   resetConfig();
 }
 
-void initMachineSetting(void){
+void initMachineSetting(void)
+{
   // some settings are assumes as active unless reported disabled by marlin
   infoMachineSettings.isMarlinFirmware        = -1; // set fimware type to -1 to avoid repeated ABL gcode on mode change
   infoMachineSettings.EEPROM                  = ENABLED;

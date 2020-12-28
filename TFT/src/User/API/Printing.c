@@ -4,29 +4,25 @@
 
 PRINTING infoPrinting;
 
-static bool update_waiting = false;
+bool filamentRunoutAlarm;
 
-static float filament_used;
+static bool updateM27_waiting = false;
 static float last_E_pos;
 
-void resetFilamentUsed(void)
+void initEpos(void)
 {
-  filament_used = 0;
   last_E_pos = ((infoFile.source == BOARD_SD) ? coordinateGetAxisActual(E_AXIS) : coordinateGetAxisTarget(E_AXIS));
 }
 
 void updateFilamentUsed(void)
 {
   float E_pos = ((infoFile.source == BOARD_SD) ? coordinateGetAxisActual(E_AXIS) : coordinateGetAxisTarget(E_AXIS));
-  if ((E_pos + 20) < last_E_pos) //Check whether E position reset. If retract more than 20mm, false filament used values would be calculated.
+  if ((E_pos + MAX_RETRACT_LIMIT) < last_E_pos) //Check whether E position reset (G92 E0)
   {
-    filament_used = filament_used + E_pos;
-    last_E_pos = E_pos;
-  } else if (E_pos > last_E_pos)
-  {
-    filament_used = filament_used + (E_pos - last_E_pos);
-    last_E_pos = E_pos;
+    last_E_pos = 0;
   }
+  filData.length += (E_pos - last_E_pos) / 1000;
+  last_E_pos = E_pos;
 }
 
 //
@@ -92,6 +88,21 @@ void setPrintRunout(bool runout)
   infoPrinting.runout = runout;
 }
 
+void setRunoutAlarmTrue(void)
+{
+  filamentRunoutAlarm = true;
+}
+
+void setRunoutAlarmFalse(void)
+{
+  filamentRunoutAlarm = false;
+}
+
+bool getRunoutAlarm(void)
+{
+  return filamentRunoutAlarm;
+}
+
 void setPrintModelIcon(bool exist)
 {
   infoPrinting.model_icon = exist;
@@ -114,7 +125,7 @@ uint32_t getPrintTime(void)
 
 void printSetUpdateWaiting(bool isWaiting)
 {
-  update_waiting = isWaiting;
+  updateM27_waiting = isWaiting;
 }
 
 //only return gcode file name except path
@@ -167,18 +178,18 @@ bool setPrintPause(bool is_pause, bool is_m0pause)
   {
     case BOARD_SD:
       infoPrinting.pause = is_pause;
-      if (is_pause){
+      if (is_pause)
         request_M25();
-      } else {
+      else
         request_M24(0);
-      }
       break;
 
     case TFT_UDISK:
     case TFT_SD:
       infoPrinting.pause = is_pause;
-      if(infoPrinting.pause == true && is_m0pause == false){
-      while (infoCmd.count != 0) {loopProcess();}
+      if(infoPrinting.pause == true && is_m0pause == false)
+      {
+        while (infoCmd.count != 0) {loopProcess();}
       }
 
       bool isCoorRelative = coorGetRelative();
@@ -189,24 +200,28 @@ bool setPrintPause(bool is_pause, bool is_m0pause)
       {
         //restore status before pause
         //if pause was triggered through M0/M1 then break
-      if(is_m0pause == true) {
-        setM0Pause(is_m0pause);
-        popupReminder(DIALOG_TYPE_ALERT, LABEL_PAUSE, LABEL_PAUSE);
-        break;
+        if(is_m0pause == true)
+        {
+          setM0Pause(is_m0pause);
+          popupReminder(DIALOG_TYPE_ALERT, LABEL_PAUSE, LABEL_PAUSE);
+          break;
         }
 
         coordinateGetAll(&tmp);
+
         if (isCoorRelative == true)     mustStoreCmd("G90\n");
         if (isExtrudeRelative == true)  mustStoreCmd("M82\n");
 
         if (heatGetCurrentTemp(heatGetCurrentHotend()) > infoSettings.min_ext_temp)
         {
-          mustStoreCmd("G1 E%.5f F%d\n", tmp.axis[E_AXIS] - infoSettings.pause_retract_len, infoSettings.pause_feedrate[E_AXIS]);
+          mustStoreCmd("G1 E%.5f F%d\n", tmp.axis[E_AXIS] - infoSettings.pause_retract_len,
+                       infoSettings.pause_feedrate[E_AXIS]);
         }
         if (coordinateIsKnown())
         {
           mustStoreCmd("G1 Z%.3f F%d\n", tmp.axis[Z_AXIS] + infoSettings.pause_z_raise, infoSettings.pause_feedrate[Z_AXIS]);
-          mustStoreCmd("G1 X%.3f Y%.3f F%d\n", infoSettings.pause_pos[X_AXIS], infoSettings.pause_pos[Y_AXIS], infoSettings.pause_feedrate[X_AXIS]);
+          mustStoreCmd("G1 X%.3f Y%.3f F%d\n", infoSettings.pause_pos[X_AXIS], infoSettings.pause_pos[Y_AXIS],
+                       infoSettings.pause_feedrate[X_AXIS]);
         }
 
         if (isCoorRelative == true)     mustStoreCmd("G91\n");
@@ -228,9 +243,10 @@ bool setPrintPause(bool is_pause, bool is_m0pause)
           mustStoreCmd("G1 X%.3f Y%.3f F%d\n", tmp.axis[X_AXIS], tmp.axis[Y_AXIS], infoSettings.pause_feedrate[X_AXIS]);
           mustStoreCmd("G1 Z%.3f F%d\n", tmp.axis[Z_AXIS], infoSettings.pause_feedrate[Z_AXIS]);
         }
-        if(heatGetCurrentTemp(heatGetCurrentHotend()) > infoSettings.min_ext_temp)
+        if (heatGetCurrentTemp(heatGetCurrentHotend()) > infoSettings.min_ext_temp)
         {
-          mustStoreCmd("G1 E%.5f F%d\n", tmp.axis[E_AXIS] - infoSettings.pause_retract_len + infoSettings.resume_purge_len, infoSettings.pause_feedrate[E_AXIS]);
+          mustStoreCmd("G1 E%.5f F%d\n", tmp.axis[E_AXIS] - infoSettings.pause_retract_len + infoSettings.resume_purge_len,
+                       infoSettings.pause_feedrate[E_AXIS]);
         }
         mustStoreCmd("G92 E%.5f\n", tmp.axis[E_AXIS]);
         mustStoreCmd("G1 F%d\n", tmp.feedrate);
@@ -244,7 +260,6 @@ bool setPrintPause(bool is_pause, bool is_m0pause)
   return true;
 }
 
-
 void exitPrinting(void)
 {
   memset(&infoPrinting, 0, sizeof(PRINTING));
@@ -256,7 +271,6 @@ void endPrinting(void)
   switch (infoFile.source)
   {
     case BOARD_SD:
-      request_M27(0);
       break;
 
     case TFT_UDISK:
@@ -267,20 +281,9 @@ void endPrinting(void)
   infoPrinting.printing = infoPrinting.pause = false;
   powerFailedClose();
   powerFailedDelete();
-  if((infoFile.source != BOARD_SD) && (infoSettings.send_end_gcode == 1))
+  if(infoSettings.send_end_gcode == 1)
   {
     sendPrintCodes(1);
-  }
-  if (infoSettings.print_summary)
-  {
-    infoMenu.cur = 0;
-    char tempstr[140];
-    u8 hour = infoPrinting.time / 3600;
-    u8 min = infoPrinting.time % 3600 / 60;
-    u8 sec = infoPrinting.time % 60;
-    sprintf(tempstr, (char *)textSelect(LABEL_PRINT_SUMMARY), hour, min, sec, filament_used / 1000);
-    resetFilamentUsed();
-    popupReminder(DIALOG_TYPE_INFO, LABEL_SCREEN_INFO, (u8 *)tempstr);
   }
 }
 
@@ -300,7 +303,9 @@ void abortPrinting(void)
   {
     case BOARD_SD:
       infoHost.printing = false;
-      breakAndContinue(); //Several M108 is sent to Marlin because consecutive blocking oprations such as heat bed, heat extruder may defer processing of M524
+      //Several M108 are sent to Marlin because consecutive blocking operations
+      // such as heating bed, extruder may defer processing of M524
+      breakAndContinue();
       breakAndContinue();
       breakAndContinue();
       breakAndContinue();
@@ -349,7 +354,7 @@ void shutdownLoop(void)
 void startShutdown(void)
 {
   char tempstr[75];
-  labelChar(tempbody, LABEL_WAIT_TEMP_SHUT_DOWN);
+  LABELCHAR(tempbody, LABEL_WAIT_TEMP_SHUT_DOWN);
   sprintf(tempstr, tempbody, infoSettings.auto_off_temp);
 
   for(u8 i = 0; i < infoSettings.fan_count; i++)
@@ -370,7 +375,7 @@ void getGcodeFromFile(void)
   u8      sd_count = 0;
   UINT    br = 0;
 
-  if(isPrinting()==false || infoFile.source == BOARD_SD)  return;
+  if(isPrinting() == false || infoFile.source == BOARD_SD)  return;
 
   powerFailedCache(infoPrinting.file.fptr);
 
@@ -385,14 +390,14 @@ void getGcodeFromFile(void)
     infoPrinting.cur++;
 
     //Gcode
-    if (sd_char == '\n' )         //'\n' is end flag for per command
+    if (sd_char == '\n' )  //'\n' is end flag for per command
     {
-      sd_comment_mode = false;   //for new command
+      sd_comment_mode = false;  //for new command
       sd_comment_space= true;
       if(sd_count!=0)
       {
         infoCmd.queue[infoCmd.index_w].gcode[sd_count++] = '\n';
-        infoCmd.queue[infoCmd.index_w].gcode[sd_count] = 0; //terminate string
+        infoCmd.queue[infoCmd.index_w].gcode[sd_count] = 0;  //terminate string
         infoCmd.queue[infoCmd.index_w].src = SERIAL_PORT;
         sd_count = 0; //clear buffer
         infoCmd.index_w = (infoCmd.index_w + 1) % CMD_MAX_LIST;
@@ -400,10 +405,11 @@ void getGcodeFromFile(void)
         break;
       }
     }
-    else if (sd_count >= CMD_MAX_CHAR - 2) {  }   //when the command length beyond the maximum, ignore the following bytes
+    else if (sd_count >= CMD_MAX_CHAR - 2)
+    {}  //when the command length beyond the maximum, ignore the following bytes
     else
     {
-      if (sd_char == ';')             //';' is comment out flag
+      if (sd_char == ';')  //';' is comment out flag
         sd_comment_mode = true;
       else
       {
@@ -423,22 +429,26 @@ void getGcodeFromFile(void)
 
 void breakAndContinue(void)
 {
-   Serial_Puts(SERIAL_PORT, "M108\n");
+  setRunoutAlarmFalse();
+  Serial_Puts(SERIAL_PORT, "M108\n");
 }
 
 void resumeAndPurge(void)
 {
-   Serial_Puts(SERIAL_PORT, "M876 S0\n");
+  setRunoutAlarmFalse();
+  Serial_Puts(SERIAL_PORT, "M876 S0\n");
 }
 
 void resumeAndContinue(void)
 {
-   Serial_Puts(SERIAL_PORT, "M876 S1\n");
+  setRunoutAlarmFalse();
+  Serial_Puts(SERIAL_PORT, "M876 S1\n");
 }
 
 bool hasPrintingMenu(void)
 {
-  for (uint8_t i = 0; i <= infoMenu.cur; i++) {
+  for (uint8_t i = 0; i <= infoMenu.cur; i++)
+  {
     if (infoMenu.menu[i] == menuPrinting) return true;
   }
   return false;
@@ -459,25 +469,25 @@ void loopCheckPrinting(void)
     }
   }
 
-  if (!infoPrinting.printing && (infoMenu.menu[infoMenu.cur] == menuPrinting) && infoSettings.print_summary)
-  {
-    infoMenu.cur = 0;
-  }
-
   if (infoFile.source != BOARD_SD) return;
   if (infoMachineSettings.autoReportSDStatus == ENABLED) return;
   if (!infoSettings.m27_active && !infoPrinting.printing) return;
 
-  static uint32_t  nextTime=0;
-  uint32_t update_time = infoSettings.m27_refresh_time * 1000;
+  static uint32_t nextCheckPrintTime = 0;
+  uint32_t update_M27_time = infoSettings.m27_refresh_time * 1000;
+
   do
   {  /* WAIT FOR M27  */
-    if(update_waiting == true) {nextTime = OS_GetTimeMs() + update_time; break;}
-    if(OS_GetTimeMs() < nextTime) break;
-
-    if(storeCmd("M27\n") == false) break;
-
-    nextTime = OS_GetTimeMs() + update_time;
-    update_waiting = true;
-  }while(0);
+    if(updateM27_waiting == true)
+    {
+      nextCheckPrintTime = OS_GetTimeMs() + update_M27_time;
+      break;
+    }
+    if(OS_GetTimeMs() < nextCheckPrintTime)
+      break;
+    if(storeCmd("M27\n") == false)
+      break;
+    nextCheckPrintTime = OS_GetTimeMs() + update_M27_time;
+    updateM27_waiting = true;
+  } while(0);
 }
