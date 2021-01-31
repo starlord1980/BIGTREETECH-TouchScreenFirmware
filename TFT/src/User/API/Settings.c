@@ -1,7 +1,6 @@
 #include "Settings.h"
 #include "includes.h"
 
-
 SETTINGS infoSettings;
 MACHINESETTINGS infoMachineSettings;
 
@@ -102,6 +101,7 @@ void infoSettingsReset(void)
   infoSettings.touchSound             = ENABLED;
   infoSettings.toastSound             = ENABLED;
   infoSettings.alertSound             = ENABLED;
+  infoSettings.heaterSound            = ENABLED;
   infoSettings.knob_led_color         = STARTUP_KNOB_LED_COLOR;
   infoSettings.knob_led_idle          = ENABLED;
   infoSettings.lcd_brightness         = DEFAULT_LCD_BRIGHTNESS;

@@ -31,8 +31,8 @@ const GUI_RECT printinfo_val_rect[6] = {
 };
 
 static uint32_t nextLayerDrawTime = 0;
-const  char *const Speed_ID[2] = {"Speed","Flow"};
-bool hasFilamentLength;
+const  char *const Speed_ID[2] = {"Speed", "Flow"};
+bool hasFilamentData;
 
 #define TOGGLE_TIME 2000 // 1 seconds is 1000
 #define LAYER_DRAW_TIME 500 // 1 seconds is 1000
@@ -46,13 +46,13 @@ bool hasFilamentLength;
 #define SPD_ICON_POS 5
 
 const ITEM itemIsPause[2] = {
-  // icon       label
-  {ICON_PAUSE,  LABEL_PAUSE},
-  {ICON_RESUME, LABEL_RESUME},
+  // icon        label
+  {ICON_PAUSE,   LABEL_PAUSE},
+  {ICON_RESUME,  LABEL_RESUME},
 };
 
 const ITEM itemIsPrinting[3] = {
-  // icon           label
+  // icon                        label
   {ICON_BACKGROUND, LABEL_BACKGROUND},
   {ICON_MAINMENU,   LABEL_MAIN_SCREEN},
   {ICON_BACK,       LABEL_BACK},
@@ -65,8 +65,6 @@ void menuBeforePrinting(void)
 
   switch (infoFile.source)
   {
-    case BOARD_SD_REMOTE:
-      break;
     case BOARD_SD: // GCode from file on ONBOARD SD
       size = request_M23_M36(infoFile.title + 5);
       //  if( powerFailedCreate(infoFile.title)==false)
@@ -83,14 +81,14 @@ void menuBeforePrinting(void)
 
       infoPrinting.size = size;
 
-      //    if(powerFailedExist())
-      //    {
+      //if(powerFailedExist())
+      //{
       request_M24(0);
-      //    }
-      //    else
-      //    {
-      //      request_M24(infoBreakPoint.offset);
-      //    }
+      //}
+      //else
+      //{
+      //request_M24(infoBreakPoint.offset);
+      //}
 
       if (infoMachineSettings.autoReportSDStatus == 1)
         request_M27(infoSettings.m27_refresh_time);  //Check if there is a SD or USB print running.
@@ -255,14 +253,13 @@ static inline void toggleInfo(void)
     speedQuery();
     if (infoFile.source >= BOARD_SD)
       coordinateQuery();
-    if (!hasFilamentLength && isPrinting())
+    if (!hasFilamentData && isPrinting())
       updateFilamentUsed();
   }
 }
 
 static inline void printingDrawPage(void)
 {
-  //  Scroll_CreatePara(&titleScroll, infoFile.title,&titleRect);
   reValueNozzle(EXT_ICON_POS);
   reValueBed(BED_ICON_POS);
   reDrawFan(FAN_ICON_POS);
@@ -281,9 +278,11 @@ void drawPrintInfo(void)
   GUI_SetColor(INFOMSG_BKCOLOR);
   GUI_DispString(rect_of_keySS[17].x0 + STATUS_MSG_ICON_XOFFSET, rect_of_keySS[17].y0 + STATUS_MSG_ICON_YOFFSET,
                  IconCharSelect(ICONCHAR_INFO));
-  GUI_DispString(rect_of_keySS[17].x0 + BYTE_HEIGHT + STATUS_MSG_TITLE_XOFFSET,
-                 rect_of_keySS[17].y0 + STATUS_MSG_ICON_YOFFSET,
-                 LABEL_PRINT_FINISHED);
+  GUI_DispStringInRectEOL(rect_of_keySS[17].x0 + BYTE_HEIGHT + STATUS_MSG_TITLE_XOFFSET,
+                          rect_of_keySS[17].y0 + STATUS_MSG_ICON_YOFFSET,
+                          rect_of_keySS[17].x1 - BYTE_HEIGHT + STATUS_MSG_TITLE_XOFFSET,
+                          rect_of_keySS[17].y1 - STATUS_MSG_ICON_YOFFSET,
+                          (uint8_t *)textSelect(LABEL_PRINT_FINISHED));
   GUI_SetColor(INFOMSG_COLOR);
   GUI_SetBkColor(INFOMSG_BKCOLOR);
   GUI_DispStringInPrect(&msgRect,LABEL_CLICK_FOR_MORE);
@@ -328,7 +327,7 @@ void printInfoPopup(void)
       strcat(showInfo, tempstr);
     }
   }
-  popupReminder(DIALOG_TYPE_INFO, (u8 *)getCurGcodeName(infoPrintSummary.name), (uint8_t *)showInfo);
+  popupReminder(DIALOG_TYPE_INFO, (uint8_t *)infoPrintSummary.name, (uint8_t *)showInfo);
 }
 
 void menuPrinting(void)
@@ -356,24 +355,26 @@ void menuPrinting(void)
   bool lastPrinting = isPrinting();
   memset(&nowHeat, 0, sizeof(HEATER));
 
-  if (infoMachineSettings.long_filename_support == ENABLED && infoFile.source == BOARD_SD)
-    printingItems.title.address = getCurGcodeName(infoFile.Longfile[infoFile.fileIndex]);
-  else
-    printingItems.title.address = getCurGcodeName(infoFile.title);
 
-  if (lastPrinting == false)
+  if (lastPrinting == true)
   {
+    if (infoMachineSettings.long_filename_support == ENABLED && infoFile.source == BOARD_SD)
+      printingItems.title.address = (uint8_t *) infoFile.Longfile[infoFile.fileIndex];
+    else
+      printingItems.title.address = getCurGcodeName(infoFile.title);
+    printingItems.items[KEY_ICON_4] = itemIsPause[lastPause];
+    printingItems.items[KEY_ICON_5].icon = (infoFile.source < BOARD_SD && infoPrinting.model_icon) ?
+                                            ICON_PREVIEW : ICON_BABYSTEP;
+  }
+  else // returned to this menu after a print was done (ex: after a popup)
+  {
+    printingItems.title.address = (uint8_t *)infoPrintSummary.name;
     printingItems.items[KEY_ICON_4] = itemIsPrinting[1]; // MainScreen
     printingItems.items[KEY_ICON_5] = itemIsPrinting[0]; // BackGround
     printingItems.items[KEY_ICON_6] = itemIsPrinting[0]; // BackGround
     printingItems.items[KEY_ICON_7] = itemIsPrinting[2]; // Back
   }
-  else
-  {
-    printingItems.items[KEY_ICON_4] = itemIsPause[lastPause];
-    printingItems.items[KEY_ICON_5].icon = (infoFile.source < BOARD_SD && infoPrinting.model_icon) ?
-                                            ICON_PREVIEW : ICON_BABYSTEP;
-  }
+
   menuDrawPage(&printingItems);
   printingDrawPage();
   if (lastPrinting == false)
@@ -458,7 +459,7 @@ void menuPrinting(void)
       menuDrawItem(&printingItems.items[KEY_ICON_4], KEY_ICON_4);
     }
 
-    // check if print is just finished
+    // check if print just started or just finished
     if (lastPrinting != isPrinting())
     {
       lastPrinting = isPrinting();
@@ -466,7 +467,7 @@ void menuPrinting(void)
       {
         return; // It will restart this interface if directly return this function without modify the value of infoMenu
       }
-      else // printing finished
+      else // print finished
       {
         printingItems.items[KEY_ICON_4] = itemIsPrinting[1]; // MainScreen
         printingItems.items[KEY_ICON_5] = itemIsPrinting[0]; // BackGround
@@ -491,7 +492,10 @@ void menuPrinting(void)
           setPrintPause(!isPause(), false);
         #ifndef TFT70_V3_0
           else
+          {
+            exitPrinting();
             infoMenu.cur = 0;
+          }
         #endif
         break;
 
@@ -500,7 +504,10 @@ void menuPrinting(void)
           if(isPrinting())
             infoMenu.menu[++infoMenu.cur] = menuBabystep;
           else
+          {
+            exitPrinting();
             infoMenu.cur = 0;
+          }
         #else
           infoMenu.menu[++infoMenu.cur] = menuBabystep;
         #endif

@@ -42,7 +42,7 @@ void menuExtrude(void)
      {ICON_LOAD,                    LABEL_LOAD},
      {ICON_BACKGROUND,              LABEL_BACKGROUND},
      {ICON_E_5_MM,                  LABEL_5_MM},
-     {ICON_NORMAL_SPEED,            LABEL_NORMAL_SPEED},
+     {ICON_NORMAL_SPEED,            LABEL_NORMAL},
      {ICON_BACK,                    LABEL_BACK},}
   };
 
@@ -105,7 +105,7 @@ void menuExtrude(void)
         else
         {
           infoMenu.menu[++infoMenu.cur] = menuHeat;
-        }        
+        }
         break;
 
       case KEY_ICON_5:
