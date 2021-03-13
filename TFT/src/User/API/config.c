@@ -656,6 +656,10 @@ void parseConfigKey(uint16_t index)
 
     #endif // ST7920_EMULATOR || LCD2004_EMULATOR
 
+    //----------------------------RRF Mode Settings
+    case C_INDEX_RRF_MACROS_ON:
+      infoSettings.rrf_macros_enable = getOnOff();
+
     //----------------------------Printer / Machine Settings
 
     case C_INDEX_HOTEND_COUNT:
@@ -805,6 +809,10 @@ void parseConfigKey(uint16_t index)
 
     case C_INDEX_XY_OFFSET_PROBING:
       infoSettings.xy_offset_probing = getOnOff();
+      break;
+
+    case C_INDEX_Z_RAISE_PROBING:
+      SET_VALID_FLOAT_VALUE(infoSettings.z_raise_probing, MIN_Z_POS_LIMIT, MAX_SIZE_LIMIT);
       break;
 
     case C_INDEX_Z_STEPPERS_ALIGNMENT:
