@@ -9,7 +9,7 @@ bool portSeen[_UART_CNT] = {false, false, false, false, false, false};
 
 struct HOST_ACTION
 {
-  char prompt_begin[20];
+  char prompt_begin[30];
   char prompt_button1[20];
   char prompt_button2[20];
   bool prompt_show;         //Show popup reminder or not
@@ -61,6 +61,23 @@ static bool ack_seen(const char * str)
   return false;
 }
 
+static bool ack_continue_seen(const char * str)
+{
+  uint16_t i;
+  for (; ack_index < ACK_MAX_SIZE && dmaL2Cache[ack_index] != 0; ack_index++)
+  {
+    for (i = 0; str[i] != 0 && dmaL2Cache[ack_index + i] != 0 && dmaL2Cache[ack_index + i] == str[i]; i++)
+    {}
+    if (str[i] == 0)
+    {
+      ack_index += i;
+      return true;
+    }
+  }
+  return false;
+}
+
+
 static bool ack_cmp(const char *str)
 {
   uint16_t i;
@@ -99,7 +116,7 @@ void ack_values_sum(float *data)
     ack_index++;
   *data += ack_value();
   while ((((dmaL2Cache[ack_index] >= '0') && (dmaL2Cache[ack_index] <= '9')) ||
-          (dmaL2Cache[ack_index] == '.'))  && (dmaL2Cache[ack_index] != '\n'))
+          (dmaL2Cache[ack_index] == '.')) && (dmaL2Cache[ack_index] != '\n'))
     ack_index++;
   if (dmaL2Cache[ack_index] != '\n')
     ack_values_sum(data);
@@ -203,29 +220,47 @@ void hostActionCommands(void)
 {
   char *find = strchr(dmaL2Cache + ack_index, '\n');
   *find = '\0';
-  if (ack_seen("notification "))
+
+  if (ack_seen(":notification "))
   {
-    strcpy(hostAction.prompt_begin, dmaL2Cache + ack_index);
+//    addToast(DIALOG_TYPE_INFO, dmaL2Cache + ack_index);  // comment the line in case Marlin sends too much notifications
     statusScreen_setMsg((uint8_t *)echomagic, (uint8_t *)dmaL2Cache + ack_index);
   }
-
-  if (ack_seen("prompt_begin "))
+  else if (ack_seen(":paused") || ack_seen(":pause"))
   {
+    infoPrinting.pause = true;
+    if (ack_seen("filament_runout"))
+    {
+      setRunoutAlarmTrue();
+    }
+  }
+  else if (ack_seen(":cancel"))  //To be added to Marlin abortprint routine
+  {
+    if (infoHost.printing == true)
+    {
+      request_M27(0);
+    }
+    infoHost.printing = false;
+    infoPrinting.printing = false;
+    infoPrinting.cur = infoPrinting.size;
+  }
+  else if (ack_seen(":prompt_begin "))
+  {
+    strcpy(hostAction.prompt_begin, dmaL2Cache + ack_index);
     hostAction.button = 0;
     hostAction.prompt_show = 1;
-    strcpy(hostAction.prompt_begin, dmaL2Cache + ack_index);
-    if (ack_seen("Resuming SD"))  // print fron onboard SD starting
+
+    if (ack_seen("Resuming"))  // resuming from onboard SD or TFT
     {
-      hostAction.prompt_show = 0;
-      infoHost.printing = true;  // it's set by "File opened" but put here also just to be sure
-      Serial_Puts(SERIAL_PORT, "M876 S0\n");  // auto-respond to a prompt request that is not shown on the TFT
-    }
-    else if (ack_seen("Resuming"))  //resuming from an onboard SD pause
-    {
+      if (isPrinting() && (infoFile.source >= BOARD_SD))  // if printing from onboard SD
+        infoHost.printing = true;
+
       infoPrinting.pause = false;
-      infoHost.printing = true;
       hostAction.prompt_show = 0;
-      Serial_Puts(SERIAL_PORT, "M876 S0\n");  // auto-respond to a prompt request that is not shown on the TFT
+      if (infoMachineSettings.firmwareType != FW_REPRAPFW)
+      {
+        Serial_Puts(SERIAL_PORT, "M876 S0\n");  // auto-respond to a prompt request that is not shown on the TFT
+      }
     }
     else if (ack_seen("Reheating"))
     {
@@ -237,7 +272,7 @@ void hostActionCommands(void)
       infoPrinting.pause = true;
     }
   }
-  else if (ack_seen("prompt_button "))
+  else if (ack_seen(":prompt_button "))
   {
     hostAction.button++;
     if (hostAction.button == 1)
@@ -249,8 +284,7 @@ void hostActionCommands(void)
       strcpy(hostAction.prompt_button2, dmaL2Cache + ack_index);
     }
   }
-
-  if (ack_seen("prompt_show") && hostAction.prompt_show)
+  else if (ack_seen(":prompt_show") && hostAction.prompt_show)
   {
     switch (hostAction.button)
     {
@@ -276,26 +310,6 @@ void hostActionCommands(void)
         break;
     }
   }
-
-  if (ack_seen("paused") || ack_seen("pause"))
-  {
-    infoPrinting.pause = true;
-    if (ack_seen ("filament_runout"))
-    {
-      setRunoutAlarmTrue();
-    }
-  }
-  else if (ack_seen("cancel"))  //To be added to Marlin abortprint routine
-  {
-    if (infoHost.printing == true)
-    {
-      request_M27(0);
-    }
-    infoHost.printing = false;
-    infoPrinting.printing = false;
-    infoPrinting.cur = infoPrinting.size;
-  }
-
 }
 
 void parseACK(void)
@@ -373,7 +387,7 @@ void parseACK(void)
 
     if (requestCommandInfo.inResponse)
     {
-      if (strlen(requestCommandInfo.cmd_rev_buf)+strlen(dmaL2Cache) < CMD_MAX_REV)
+      if (strlen(requestCommandInfo.cmd_rev_buf) + strlen(dmaL2Cache) < CMD_MAX_REV)
       {
         strcat(requestCommandInfo.cmd_rev_buf, dmaL2Cache);
         if (ack_seen(requestCommandInfo.stopMagic))
@@ -403,7 +417,7 @@ void parseACK(void)
         infoHost.wait = false;
 
       //----------------------------------------
-      // Pushed / on printing parsed responses
+      // Pushed / polled / on printing parsed responses
       //----------------------------------------
 
       // parse and store temperatures
@@ -445,7 +459,7 @@ void parseACK(void)
         }
         coordinateQuerySetWait(false);
       }
-      // parse and store extruder position, response of "M114 E\n", required "M114_DETAIL" in Marlin
+      // parse and store M114 E, extruder position. Required "M114_DETAIL" in Marlin
       else if (ack_seen("Count E:"))
       {
         coordinateSetExtruderActualSteps(ack_value());
@@ -499,10 +513,10 @@ void parseACK(void)
       // parse pause message
       else if (!infoMachineSettings.promptSupport && ack_seen("paused for user"))
       {
-        setDialogText((u8*)"Printer is Paused",(u8*)"Paused for user\ncontinue?", LABEL_CONFIRM, LABEL_BACKGROUND);
-        showDialog(DIALOG_TYPE_QUESTION, breakAndContinue, NULL,NULL);
+        setDialogText((u8*)"Printer is Paused", (u8*)"Paused for user\ncontinue?", LABEL_CONFIRM, LABEL_BACKGROUND);
+        showDialog(DIALOG_TYPE_QUESTION, breakAndContinue, NULL, NULL);
       }
-      // parse "HOST_ACTION_COMMANDS"
+      // parse host action commands. Required "HOST_ACTION_COMMANDS" and other settings in Marlin
       else if (ack_seen("//action:"))
       {
         hostActionCommands();
@@ -524,21 +538,36 @@ void parseACK(void)
         }
         hasFilamentData = true;
       }
-      else if (infoMachineSettings.onboard_sd_support == ENABLED && ack_seen("File opened: "))
+      else if (infoMachineSettings.onboard_sd_support == ENABLED &&
+               ack_seen(infoMachineSettings.firmwareType != FW_REPRAPFW
+                         ? "File opened:" : "job.file.fileName"))
       {
-        // File opened: 1A29A~1.GCO Size: 6974
+        char *fileEndString;
+        if (infoMachineSettings.firmwareType != FW_REPRAPFW)
+        {
+          // Marlin
+          // File opened: 1A29A~1.GCO Size: 6974
+          fileEndString = " Size:";
+        }
+        else
+        {
+          // RRF
+          // {"key":"job.file.fileName","flags": "","result":"0:/gcodes/pig-4H.gcode"}
+          ack_seen("result\":\"");
+          fileEndString = "\"";
+        }
         uint16_t start_index = ack_index;
-        uint16_t end_index = ack_seen("Size: ") ? (ack_index - sizeof("Size: ")) : start_index;
+        uint16_t end_index = ack_continue_seen(fileEndString) ? (ack_index - strlen(fileEndString)) : start_index;
         uint16_t path_len = MIN(end_index - start_index, MAX_PATH_LEN - strlen(getCurFileSource()) - 1);
         sprintf(infoFile.title,"%s/", getCurFileSource());
         strncat(infoFile.title, dmaL2Cache + start_index, path_len);
         infoFile.title[path_len + strlen(getCurFileSource()) + 1] = '\0';
 
-        infoPrinting.pause = false;
         infoHost.printing = true;
+        infoPrinting.pause = false;
         infoPrinting.time = 0;
         infoPrinting.cur = 0;
-        infoPrinting.size = ack_value();
+        infoPrinting.size = 1; // Should be different with .cur to avoid 100% progress on TFT, Get the correct value by M27
 
         infoFile.source = BOARD_SD_REMOTE;
         initPrintSummary();
@@ -553,22 +582,27 @@ void parseACK(void)
                ack_seen("Not SD printing"))
       {
         infoHost.printing = false;
-        if (infoPrinting.printing)
+        if (isPrinting())
           infoPrinting.pause = true;
       }
       else if (infoMachineSettings.onboard_sd_support == ENABLED &&
                infoFile.source >= BOARD_SD &&
                ack_seen("SD printing byte"))
       {
-        infoPrinting.pause = false;
+        if (infoMachineSettings.firmwareType != FW_REPRAPFW)
+        {
+          infoPrinting.pause = false;
+        }
         // Parsing printing data
         // Example: SD printing byte 123/12345
         infoPrinting.cur = ack_value();
+        infoPrinting.size = ack_second_value();
         // powerFailedCache(position);
       }
       else if (infoMachineSettings.onboard_sd_support == ENABLED &&
                infoFile.source >= BOARD_SD &&
-               ack_seen("Done printing file"))
+               ack_seen(infoMachineSettings.firmwareType != FW_REPRAPFW
+                         ? "Done printing file" : "Finished printing file"))
       {
         infoHost.printing = false;
         printingFinished();
@@ -579,7 +613,7 @@ void parseACK(void)
       // Tuning parsed responses
       //----------------------------------------
 
-      // parse
+      // parse and store build volume size
       else if (ack_seen("work:"))
       {
         if (ack_seen("min:"))
@@ -613,7 +647,7 @@ void parseACK(void)
         {
           sprintf (&tmpMsg[strlen(tmpMsg)], "\nRange: %0.5f", ack_value());
         }
-        setDialogText( (u8* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
+        setDialogText((u8* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
         showDialog(DIALOG_TYPE_INFO, NULL, NULL, NULL);
       }
       // parse M48, Standard Deviation
@@ -625,7 +659,7 @@ void parseACK(void)
         if (strcmp(tmpMsg, "Mean: ") == 0)
         {
           sprintf(tmpMsg, "%s\nStandard Deviation: %0.5f", (char *)getDialogMsgStr(), ack_value());
-          setDialogText( (u8* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
+          setDialogText((u8* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
           showDialog(DIALOG_TYPE_INFO, NULL, NULL, NULL);
         }
       }
@@ -981,6 +1015,11 @@ void parseACK(void)
           infoMachineSettings.firmwareType = FW_REPRAPFW;
           setupMachine();
         }
+        else if (ack_seen("Smoothieware"))
+        {
+          infoMachineSettings.firmwareType = FW_SMOOTHIEWARE;
+          setupMachine();
+        }
         else
         {
           infoMachineSettings.firmwareType = FW_UNKNOWN;
@@ -1094,7 +1133,7 @@ void parseACK(void)
         }
       }
 
-      // keep here and parse at lastest
+      // keep it here and parse it the latest
       else if (infoMachineSettings.firmwareType == FW_REPRAPFW)
       {
         if (ack_seen(warningmagic))
@@ -1124,6 +1163,13 @@ void parseACK(void)
             infoSetIPAddress(string, string_end - string_start);  // Set IP address
           }
         }
+      } 
+      else if (infoMachineSettings.firmwareType == FW_SMOOTHIEWARE)
+      {
+        if (ack_seen(errorZProbe)) //smoothieboard ZProbe triggered before move, aborting command.
+        {
+          ackPopupInfo("ZProbe triggered\n before move.\n Aborting Print!");
+        } 
       }
     }
 
