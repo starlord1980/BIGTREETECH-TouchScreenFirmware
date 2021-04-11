@@ -620,6 +620,31 @@ void showLiveInfo(uint8_t index, const LIVE_INFO * liveicon, const ITEM * item)
   GUI_RestoreColorDefault();
 }  //showLiveInfo
 
+//Show live info text on icons for LevelCorner
+void showLevelCornerLiveInfo(uint8_t index, uint8_t Levelindex, const LIVE_INFO * liveicon, const ITEM * item)
+{
+  const GUI_RECT *rect = curRect + ITEM_PER_PAGE + index;
+  GUI_ClearPrect(rect);
+  if (item != NULL) menuDrawIconOnly(item,index);
+  GUI_DispStringInPrect(rect, liveicon->lines[Levelindex].text);
+} //showLevelCornerLiveInfo
+
+//Show text on icons (used in LevelCorner with ICON_BLTOUCH unified)
+void showTextOnIcon(uint8_t index, uint8_t Levelindex, const LIVE_INFO * liveicon, const ITEM * item)
+{
+  if (item != NULL) menuDrawIconOnly(item,index);
+  GUI_SetColor(ORANGE);
+  GUI_SetTextMode(GUI_TEXTMODE_TRANS);
+  GUI_POINT loc;
+  loc.x = liveicon->lines[Levelindex].pos.x + curRect[index].x0 - 4;
+  loc.y = liveicon->lines[Levelindex].pos.y + curRect[index].y0 - 6;
+  setLargeFont(VAL_LARGE_FONT);
+  GUI_DispStringCenter(loc.x, loc.y, liveicon->lines[Levelindex].text);
+  GUI_SetColor(WHITE);
+  GUI_DispStringCenter(loc.x - 2, loc.y - 2, liveicon->lines[Levelindex].text);
+  GUI_RestoreColorDefault();
+} //showTextOnIcon
+
 //When there is a button value, the icon changes color and redraws
 void itemDrawIconPress(uint8_t position, uint8_t is_press)
 {
@@ -793,7 +818,7 @@ GUI_POINT getIconStartPoint(int index)
 void loopBackEnd(void)
 {
   // Get Gcode command from the file to be printed
-  getGcodeFromFile();
+  loopPrintFromTFT();  // handle a print from TFT, if any
   // Parse and send Gcode commands in the queue
   sendQueueCmd();
   // Parse the received slave response information
@@ -817,7 +842,7 @@ void loopBackEnd(void)
 
   if (infoMachineSettings.onboard_sd_support == ENABLED)
   {
-    loopCheckPrinting();  //Check if there is a SD or USB print running.
+    loopPrintFromHost();  // handle a print from onboard SD or remote host, if any
   }
 
 #ifdef U_DISK_SUPPORT
