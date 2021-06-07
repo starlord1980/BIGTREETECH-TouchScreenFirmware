@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include "interfaceCmd.h"
 
-#define CMD_MAX_REV 5000
-
+#define CMD_MAX_REV   5000
 #define MAX_ERROR_NUM 3
+
 typedef struct
 {
   char *cmd_rev_buf;       // buffer where store the command response
@@ -24,6 +24,8 @@ typedef struct
 
 extern REQUEST_COMMAND_INFO requestCommandInfo;
 
+bool isWaitingResponse(void);  // condition callback for loopProcessToCondition()
+
 void clearRequestCommandInfo(void);
 bool requestCommandInfoIsRunning(void);
 bool request_M21(void);
@@ -33,7 +35,7 @@ long request_M23_M36(char *filename);
 void request_M24(int pos);
 void request_M524(void);
 void request_M25(void);
-void request_M27(int seconds);
+void request_M27(uint8_t seconds);
 void request_M125(void);
 void request_M0(void);
 void request_M98(char *filename);

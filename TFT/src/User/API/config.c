@@ -1,11 +1,10 @@
 #include "config.h"
 #include "includes.h"
 
-//#define CONFIG_DEBUG  // To be used only when calling 'getConfigFromFile()' after boot process
-#ifdef CONFIG_DEBUG
-#define PRINTDEBUG(x) Serial_Puts(SERIAL_PORT, x);
+#ifdef SERIAL_DEBUG_PORT  // To be used only when calling 'getConfigFromFile()' after boot process
+  #define PRINTDEBUG(x) Serial_Puts(SERIAL_DEBUG_PORT, x);
 #else
-#define PRINTDEBUG(x)
+  #define PRINTDEBUG(x)
 #endif
 
 #define SET_VALID_INT_VALUE(VARIABLE, MIN, MAX) VARIABLE = valid_intValue(MIN, MAX, VARIABLE)
@@ -43,7 +42,10 @@ bool scheduleRotate = false;
 bool getConfigFromFile(void)
 {
   if (f_file_exists(CONFIG_FILE_PATH) == false)
+  {
+    PRINTDEBUG("configFile not found\n");
     return false;
+  }
 
   CUSTOM_GCODES tempCustomGcodes;
   PRINT_GCODES tempPrintCodes;
@@ -74,10 +76,12 @@ bool getConfigFromFile(void)
     }
     storePara();
     saveConfig();
+    PRINTDEBUG("config saved\n");
     return true;
   }
   else
   {
+    PRINTDEBUG("configFile save failed\n");
     return false;
   }
 }
@@ -130,9 +134,6 @@ bool getLangFromFile(void)
 
 bool readConfigFile(const char * path, void (*lineParser)(), uint16_t maxLineLen)
 {
-  #ifdef CONFIG_DEBUG
-    Serial_ReSourceInit();
-  #endif
   bool comment_mode = false;
   bool comment_space = true;
   char cur_char;
@@ -170,7 +171,7 @@ bool readConfigFile(const char * path, void (*lineParser)(), uint16_t maxLineLen
         return false;
       }
       configFile.cur++;
-      PRINTDEBUG("Line ++\n");
+      //PRINTDEBUG("Line ++\n");
 
       if (cur_char == '\n')  // start parsing line after new line.
       {
@@ -533,6 +534,10 @@ void parseConfigKey(uint16_t index)
       SET_VALID_INT_VALUE(infoSettings.baudrate, 0, BAUDRATE_COUNT - 1);
       break;
 
+    case C_INDEX_MULTI_SERIAL:
+      SET_VALID_INT_VALUE(infoSettings.multi_serial, 0, MAX_MULTI_SERIAL - 1);
+      break;
+
     case C_INDEX_LANGUAGE:
       SET_VALID_INT_VALUE(infoSettings.language, 0, LANGUAGE_NUM - 1);
       break;
@@ -606,6 +611,10 @@ void parseConfigKey(uint16_t index)
 
     case C_INDEX_LIST_MODE:
       infoSettings.file_listmode = getOnOff();
+      break;
+
+    case C_INDEX_FILES_SORT_BY:
+      SET_VALID_INT_VALUE(infoSettings.files_sort_by, 0, SORT_BY_COUNT);
       break;
 
     case C_INDEX_ACK_NOTIFICATION:
@@ -691,8 +700,8 @@ void parseConfigKey(uint16_t index)
       SET_VALID_INT_VALUE(infoSettings.fan_count, 1, MAX_FAN_COUNT);
       break;
 
-    case C_INDEX_FAN_CTRL_COUNT:
-      SET_VALID_INT_VALUE(infoSettings.fan_ctrl_count, 0, MAX_FAN_CTRL_COUNT);
+    case C_INDEX_CONTROLLER_FAN:
+      infoSettings.ctrl_fan_en = getOnOff();
       break;
 
     case C_INDEX_MAX_TEMP:
@@ -865,7 +874,7 @@ void parseConfigKey(uint16_t index)
         break;
 
       case C_INDEX_PS_LOGIC:
-        infoSettings.powerloss_invert = getOnOff();
+        infoSettings.ps_active_high = getOnOff();
         break;
 
       case C_INDEX_SHUTDOWN_TEMP:
@@ -894,7 +903,7 @@ void parseConfigKey(uint16_t index)
         break;
     #endif
 
-    //----------------------------Power Loss Recovery & BTT UPS Settings (if connected to TFT controller)
+    //----------------------------Power Loss Recovery & BTT UPS Settings
 
     #ifdef BTT_MINI_UPS
       case C_INDEX_POWERLOSS_EN:

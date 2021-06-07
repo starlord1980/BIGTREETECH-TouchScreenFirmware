@@ -275,7 +275,7 @@ void meshDeallocData(void)
   probeHeightDisable();                                    // restore original software endstops state
 }
 
-bool processKnownDataFormat(char *dataRow)
+static inline bool processKnownDataFormat(char *dataRow)
 {
   bool isKnown = false;
   uint8_t i;
@@ -459,7 +459,7 @@ static inline float meshGetValueMax(void)
   return meshData->valueMax;
 }
 
-bool meshUpdateValueMinMax(float value)
+static inline bool meshUpdateValueMinMax(float value)
 {
   bool isValueChanged = false;
 
@@ -489,7 +489,7 @@ bool meshUpdateValueMinMax(float value)
   return isValueChanged;
 }
 
-void meshFullUpdateValueMinMax(void)
+static inline void meshFullUpdateValueMinMax(void)
 {
   if (!meshGetStatus())
     return;
@@ -568,13 +568,13 @@ void meshDrawGrid(void)
 void meshDrawInfo(float *minVal, float *maxVal, float *origVal, float *curVal)
 {
   if (minVal != NULL)
-    drawStandardValue(&meshInfoRect[ME_INFO_MIN], VALUE_FLOAT, minVal, false, meshGetRGBColor(*minVal), MESH_BG_COLOR, 1, true);
+    drawStandardValue(&meshInfoRect[ME_INFO_MIN], VALUE_FLOAT, minVal, FONT_SIZE_NORMAL, meshGetRGBColor(*minVal), MESH_BG_COLOR, 1, true);
 
   if (maxVal != NULL)
-    drawStandardValue(&meshInfoRect[ME_INFO_MAX], VALUE_FLOAT, maxVal, false, meshGetRGBColor(*maxVal), MESH_BG_COLOR, 1, true);
+    drawStandardValue(&meshInfoRect[ME_INFO_MAX], VALUE_FLOAT, maxVal, FONT_SIZE_NORMAL, meshGetRGBColor(*maxVal), MESH_BG_COLOR, 1, true);
 
-  drawStandardValue(&meshInfoRect[ME_INFO_ORIG], VALUE_FLOAT, origVal, false, MESH_FONT_COLOR, MESH_BG_COLOR, 1, true);
-  drawStandardValue(&meshInfoRect[ME_INFO_CUR], VALUE_FLOAT, curVal, true, MESH_FONT_COLOR, MESH_BORDER_COLOR, 4, true);
+  drawStandardValue(&meshInfoRect[ME_INFO_ORIG], VALUE_FLOAT, origVal, FONT_SIZE_NORMAL, MESH_FONT_COLOR, MESH_BG_COLOR, 1, true);
+  drawStandardValue(&meshInfoRect[ME_INFO_CUR], VALUE_FLOAT, curVal, FONT_SIZE_LARGE, MESH_FONT_COLOR, MESH_BORDER_COLOR, 4, true);
 }
 
 void meshDrawFullInfo(void)
@@ -623,7 +623,7 @@ void meshDrawKeyboard(void)
   for (uint8_t i = 0; i < ME_KEY_NUM; i++)
   {
     if (i > ME_KEY_EDIT)                                   // if not a unicode string
-      drawStandardValue(&meshKeyRect[i], VALUE_STRING, meshKeyString[i], true, MESH_FONT_COLOR, MESH_BG_COLOR, 3, true);
+      drawStandardValue(&meshKeyRect[i], VALUE_STRING, meshKeyString[i], FONT_SIZE_LARGE, MESH_FONT_COLOR, MESH_BG_COLOR, 3, true);
   }
 
   // draw control icons
@@ -667,14 +667,7 @@ void meshDrawMenu(void)
 
   // draw values
   if (meshGetStatus())
-  {
-    float minValue = meshGetValueMin();
-    float maxValue = meshGetValueMax();
-    float origValue = meshGetValueOrig(meshGetIndex());
-    float curValue = meshGetValue(meshGetIndex());
-
-    meshDrawInfo(&minValue, &maxValue, &origValue, &curValue);
-  }
+    meshDrawFullInfo();
 }
 
 void meshSave(bool saveOnChange)

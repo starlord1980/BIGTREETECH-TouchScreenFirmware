@@ -1,6 +1,9 @@
 #include "common.h"
 #include "includes.h"
 
+// scrolling text line
+SCROLL scrollLine;
+
 // indexes for status icon toggles
 uint8_t currentTool = NOZZLE0;
 uint8_t currentFan = 0;
@@ -111,7 +114,20 @@ bool nextScreenUpdate(uint32_t duration)
   }
 }
 
-const void drawBorder(const GUI_RECT *rect, uint16_t color, uint16_t edgeDistance)
+#ifdef FRIENDLY_Z_OFFSET_LANGUAGE
+  void invertZAxisIcons(MENUITEMS * menuItems)
+  {
+    if (infoSettings.invert_axis[Z_AXIS] == 1)
+    {
+      menuItems->items[KEY_ICON_0].icon = ICON_Z_INC;
+      menuItems->items[KEY_ICON_0].label.index = LABEL_UP;
+      menuItems->items[KEY_ICON_3].icon = ICON_Z_DEC;
+      menuItems->items[KEY_ICON_3].label.index = LABEL_DOWN;
+    }
+  }
+#endif
+
+void drawBorder(const GUI_RECT *rect, uint16_t color, uint16_t edgeDistance)
 {
   //uint16_t origColor = GUI_GetColor();
 
@@ -122,7 +138,7 @@ const void drawBorder(const GUI_RECT *rect, uint16_t color, uint16_t edgeDistanc
   //GUI_SetColor(origColor);
 }
 
-const void drawBackground(const GUI_RECT *rect, uint16_t bgColor, uint16_t edgeDistance)
+void drawBackground(const GUI_RECT *rect, uint16_t bgColor, uint16_t edgeDistance)
 {
   //uint16_t origBgColor = GUI_GetBkColor();
 
@@ -133,8 +149,8 @@ const void drawBackground(const GUI_RECT *rect, uint16_t bgColor, uint16_t edgeD
   //GUI_SetBkColor(origBgColor);
 }
 
-const void drawStandardValue(const GUI_RECT *rect, VALUE_TYPE valType, const void *val, bool largeFont,
-                             uint16_t color, uint16_t bgColor, uint16_t edgeDistance, bool clearBgColor)
+void drawStandardValue(const GUI_RECT *rect, VALUE_TYPE valType, const void *val, uint16_t font,
+                       uint16_t color, uint16_t bgColor, uint16_t edgeDistance, bool clearBgColor)
 {
   uint16_t origColor = GUI_GetColor();
   uint16_t origBgColor = GUI_GetBkColor();
@@ -172,67 +188,30 @@ const void drawStandardValue(const GUI_RECT *rect, VALUE_TYPE valType, const voi
     GUI_SetColor(color);
     GUI_SetBkColor(bgColor);
 
-    setLargeFont(largeFont);
+    setFontSize(font);
     GUI_DispStringInRect(rect->x0 + edgeDistance, rect->y0 + edgeDistance,
                          rect->x1 - edgeDistance, rect->y1 - edgeDistance,
                          (uint8_t *) buf);
-    setLargeFont(false);
+    setFontSize(FONT_SIZE_NORMAL);
   }
 
   GUI_SetColor(origColor);
   GUI_SetBkColor(origBgColor);
 }
 
-const bool warmupTemperature(uint8_t toolIndex, void (* callback)(void))
-{
-  if (heatGetCurrentTemp(toolIndex) < infoSettings.min_ext_temp)
-  { // low temperature warning
-    char tempMsg[120];
-    LABELCHAR(tempStr, LABEL_EXT_TEMPLOW);
-
-    sprintf(tempMsg, tempStr, infoSettings.min_ext_temp);
-    strcat(tempMsg, "\n");
-    sprintf(tempStr, (char *) textSelect(LABEL_HEAT_HOTEND), infoSettings.min_ext_temp);
-    strcat(tempMsg, tempStr);
-
-    setDialogText(LABEL_WARNING, (uint8_t *) tempMsg, LABEL_CONFIRM, LABEL_CANCEL);
-    showDialog(DIALOG_TYPE_ERROR, callback, NULL, NULL);
-
-    return false;
-  }
-
-  return true;
-}
-
-const void cooldownTemperature(void)
-{
-  if (!isPrinting())
-  {
-    for (uint8_t i = 0; i < MAX_HEATER_COUNT; i++)
-    {
-      if (heatGetTargetTemp(i) > 0)
-      {
-        setDialogText(LABEL_WARNING, LABEL_HEATERS_ON, LABEL_CONFIRM, LABEL_CANCEL);
-        showDialog(DIALOG_TYPE_QUESTION, heatCoolDown, NULL, NULL);
-        break;
-      }
-    }
-  }
-}
-
 // Show/draw a temperature in a standard menu
-const void temperatureReDraw(uint8_t toolIndex, int16_t * temp, bool skipHeader)
+void temperatureReDraw(uint8_t toolIndex, int16_t * temp, bool skipHeader)
 {
   char tempstr[20];
 
-  setLargeFont(true);
+  setFontSize(FONT_SIZE_LARGE);
 
   if (!skipHeader)
   {
     sprintf(tempstr, "%-8s", heatDisplayID[toolIndex]);
-    setLargeFont(false);
+    setFontSize(FONT_SIZE_NORMAL);
     GUI_DispString(exhibitRect.x0, exhibitRect.y0, (uint8_t *) tempstr);
-    setLargeFont(true);
+    setFontSize(FONT_SIZE_LARGE);
     GUI_DispStringCenter((exhibitRect.x0 + exhibitRect.x1) >> 1, exhibitRect.y0, (uint8_t *) "ºC");
   }
 
@@ -242,22 +221,22 @@ const void temperatureReDraw(uint8_t toolIndex, int16_t * temp, bool skipHeader)
     sprintf(tempstr, "%4d/%-4d", heatGetCurrentTemp(toolIndex), heatGetTargetTemp(toolIndex));
 
   GUI_DispStringInPrect(&exhibitRect, (uint8_t *) tempstr);
-  setLargeFont(false);
+  setFontSize(FONT_SIZE_NORMAL);
 }
 
 // Show/draw fan in a standard menu
-const void fanReDraw(uint8_t fanIndex, bool skipHeader)
+void fanReDraw(uint8_t fanIndex, bool skipHeader)
 {
   char tempstr[20];
 
-  setLargeFont(true);
+  setFontSize(FONT_SIZE_LARGE);
 
   if (!skipHeader)
   {
     sprintf(tempstr, "%-8s", fanID[fanIndex]);
-    setLargeFont(false);
+    setFontSize(FONT_SIZE_NORMAL);
     GUI_DispString(exhibitRect.x0, exhibitRect.y0, (uint8_t *) tempstr);
-    setLargeFont(true);
+    setFontSize(FONT_SIZE_LARGE);
 
     if (infoSettings.fan_percentage == 1)
     {
@@ -275,36 +254,36 @@ const void fanReDraw(uint8_t fanIndex, bool skipHeader)
     sprintf(tempstr, "%4d/%-4d", fanGetCurSpeed(fanIndex), fanGetSetSpeed(fanIndex));
 
   GUI_DispStringInPrect(&exhibitRect, (uint8_t *) tempstr);
-  setLargeFont(false);
+  setFontSize(FONT_SIZE_NORMAL);
 }
 
 // Show/draw extruder in a standard menu
-const void extruderReDraw(uint8_t extruderIndex, float extrusion, bool skipHeader)
+void extruderReDraw(uint8_t extruderIndex, float extrusion, bool skipHeader)
 {
   char tempstr[20];
 
-  setLargeFont(true);
+  setFontSize(FONT_SIZE_LARGE);
 
   if (!skipHeader)
   {
     sprintf(tempstr, "%-8s", extruderDisplayID[extruderIndex]);
-    setLargeFont(false);
+    setFontSize(FONT_SIZE_NORMAL);
     GUI_DispString(exhibitRect.x0, exhibitRect.y0, (uint8_t *) tempstr);
-    setLargeFont(true);
+    setFontSize(FONT_SIZE_LARGE);
     GUI_DispStringCenter((exhibitRect.x0 + exhibitRect.x1) >> 1, exhibitRect.y0, (uint8_t *) "mm");
   }
 
   sprintf(tempstr, "  %.2f  ", extrusion);
   GUI_DispStringInPrect(&exhibitRect, (uint8_t *) tempstr);
-  setLargeFont(false);
+  setFontSize(FONT_SIZE_NORMAL);
 }
 
 // Show/draw percentage in a standard menu
-const void percentageReDraw(uint8_t itemIndex, bool skipHeader)
+void percentageReDraw(uint8_t itemIndex, bool skipHeader)
 {
   char tempstr[20];
 
-  setLargeFont(true);
+  setFontSize(FONT_SIZE_LARGE);
 
   if (!skipHeader)
   {
@@ -313,41 +292,115 @@ const void percentageReDraw(uint8_t itemIndex, bool skipHeader)
     else
       sprintf(tempstr, "%-15s", textSelect(LABEL_PERCENTAGE_FLOW));
 
-    setLargeFont(false);
+    setFontSize(FONT_SIZE_NORMAL);
     GUI_DispString(exhibitRect.x0, exhibitRect.y0, (uint8_t *) tempstr);
-    setLargeFont(true);
+    setFontSize(FONT_SIZE_LARGE);
     GUI_DispStringCenter((exhibitRect.x0 + exhibitRect.x1) >> 1, exhibitRect.y0, (uint8_t *) "%");
   }
 
   sprintf(tempstr, "%4d/%-4d", speedGetCurPercent(itemIndex), speedGetSetPercent(itemIndex));
   GUI_DispStringInPrect(&exhibitRect, (uint8_t *) tempstr);
-  setLargeFont(false);
+  setFontSize(FONT_SIZE_NORMAL);
 }
 
 // Edit an integer value in a standard menu
-const int16_t editIntValue(int16_t minValue, int16_t maxValue, int16_t resetValue, int16_t value)
+int32_t editIntValue(int32_t minValue, int32_t maxValue, int32_t resetValue, int32_t value)
 {
-  int16_t val;
+  int32_t val;
   char tempstr[30];
 
   sprintf(tempstr, "Min:%i | Max:%i", minValue, maxValue);
-
   val = numPadInt((uint8_t *) tempstr, value, resetValue, false);
-  val = NOBEYOND(minValue, val, maxValue);
 
-  return val;
+  return NOBEYOND(minValue, val, maxValue);
 }
 
 // Edit a float value in a standard menu
-const float editFloatValue(float minValue, float maxValue, float resetValue, float value)
+float editFloatValue(float minValue, float maxValue, float resetValue, float value)
 {
   float val;
   char tempstr[30];
 
   sprintf(tempstr, "Min:%.2f | Max:%.2f", minValue, maxValue);
-
   val = numPadFloat((uint8_t *) tempstr, value, resetValue, true);
-  val = NOBEYOND(minValue, val, maxValue);
 
-  return val;
+  return NOBEYOND(minValue, val, maxValue);
+}
+
+NOZZLE_STATUS warmupNozzle(uint8_t toolIndex, void (* callback)(void))
+{
+  if (heatGetTargetTemp(toolIndex) < infoSettings.min_ext_temp)
+  {
+    if (heatGetCurrentTemp(toolIndex) < infoSettings.min_ext_temp)
+    { // low temperature warning
+      char tempMsg[200];
+      char tempStr[100];
+
+      sprintf(tempMsg, (char *)textSelect(LABEL_EXT_TEMPLOW), infoSettings.min_ext_temp);
+      sprintf(tempStr, (char *)textSelect(LABEL_HEAT_HOTEND), infoSettings.min_ext_temp);
+      strcat(tempMsg, "\n");
+      strcat(tempMsg, tempStr);
+
+      setDialogText(LABEL_WARNING, (uint8_t *)tempMsg, LABEL_CONFIRM, LABEL_CANCEL);
+      showDialog(DIALOG_TYPE_ERROR, callback, NULL, NULL);
+
+      return COLD;
+    }
+    // temperature falling down to a target lower than the minimal extrusion temperature
+    else
+    { // contiunue with current temp but no lower than the minimum extruder temperature
+      heatSetTargetTemp(toolIndex, MAX(infoSettings.min_ext_temp, heatGetCurrentTemp(toolIndex)));
+      return SETTLING;
+    }
+  }
+  else
+  {
+    if (heatGetCurrentTemp(toolIndex) < heatGetTargetTemp(toolIndex))
+    {
+      if (heatGetCurrentTemp(toolIndex) < heatGetTargetTemp(toolIndex) - NOZZLE_TEMP_LAG)
+      { // low temperature warning
+        char tempMsg[200];
+        char tempStr[100];
+
+        sprintf(tempMsg, (char *)textSelect(LABEL_DESIRED_TEMPLOW), heatGetTargetTemp(toolIndex));
+        sprintf(tempStr, (char *)textSelect(LABEL_WAIT_HEAT_UP));
+        strcat(tempMsg, "\n");
+        strcat(tempMsg, tempStr);
+
+        setDialogText(LABEL_WARNING, (uint8_t *)tempMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
+        showDialog(DIALOG_TYPE_ERROR, NULL, NULL, NULL);
+        return COLD;
+      }
+      else
+      {
+        char tempMsg[200];
+
+        sprintf(tempMsg, (char *)textSelect(LABEL_NOZZLE_STABILIZING), heatGetTargetTemp(toolIndex));
+        if (!toastRunning())
+        {
+          addToast(DIALOG_TYPE_INFO, tempMsg);
+        }
+        return SETTLING;
+      }
+    }
+  }
+
+  return HEATED;
+}
+
+// user choice for disabling all heaters/hotends
+void cooldownTemperature(void)
+{
+  if (!isPrinting())
+  {
+    for (uint8_t i = 0; i < MAX_HEATER_COUNT; i++)
+    {
+      if (heatGetTargetTemp(i) > 0)
+      {
+        setDialogText(LABEL_WARNING, LABEL_HEATERS_ON, LABEL_CONFIRM, LABEL_CANCEL);
+        showDialog(DIALOG_TYPE_QUESTION, heatCoolDown, NULL, NULL);
+        break;
+      }
+    }
+  }
 }

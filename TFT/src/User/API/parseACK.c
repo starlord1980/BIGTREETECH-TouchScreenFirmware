@@ -12,6 +12,7 @@ static const char messagemagic[] = "message";                      // RRF messag
 static const char errorZProbe[] = "ZProbe triggered before move";  // smoothieware message
 
 bool portSeen[_UART_CNT] = {false, false, false, false, false, false};
+bool hostDialog = false;
 
 struct HOST_ACTION
 {
@@ -31,8 +32,8 @@ typedef enum  // popup message types available to display an echo message
 
 typedef struct
 {
-  ECHO_NOTIFY_TYPE  notifyType;
-  const char *const msg;
+  ECHO_NOTIFY_TYPE   notifyType;
+  const char * const msg;
 } ECHO;
 
 // notify or ignore messages starting with following text
@@ -96,7 +97,7 @@ static bool ack_continue_seen(const char * str)
   return false;
 }
 
-static bool ack_cmp(const char *str)
+static bool ack_cmp(const char * str)
 {
   uint16_t i;
   for (i = 0; i < ACK_MAX_SIZE && str[i] != 0 && dmaL2Cache[i] != 0; i++)
@@ -117,7 +118,7 @@ static float ack_value()
 // Read the value after the / if exists
 static float ack_second_value()
 {
-  char *secondValue = strchr(&dmaL2Cache[ack_index], '/');
+  char * secondValue = strchr(&dmaL2Cache[ack_index], '/');
   if (secondValue != NULL)
   {
     return (strtod(secondValue + 1, NULL));
@@ -140,7 +141,7 @@ void ack_values_sum(float *data)
     ack_values_sum(data);
 }
 
-void ackPopupInfo(const char *info)
+void ackPopupInfo(const char * info)
 {
   bool show_dialog = true;
   if (infoMenu.menu[infoMenu.cur] == menuTerminal ||
@@ -209,7 +210,7 @@ bool processKnownEcho(void)
       else if (knownEcho[i].notifyType == ECHO_NOTIFY_DIALOG)
       {
         BUZZER_PLAY(sound_notify);
-        addNotification(DIALOG_TYPE_INFO, (char*)echomagic, (char*)dmaL2Cache + ack_index, true);
+        addNotification(DIALOG_TYPE_INFO, (char *)echomagic, (char *)dmaL2Cache + ack_index, true);
       }
     //}
   }
@@ -236,28 +237,38 @@ void syncL2CacheFromL1(uint8_t port)
 
 void hostActionCommands(void)
 {
-  char *find = strchr(dmaL2Cache + ack_index, '\n');
+  char * find = strchr(dmaL2Cache + ack_index, '\n');
   *find = '\0';
 
   if (ack_seen(":notification "))
   {
-    statusScreen_setMsg((uint8_t *)echomagic, (uint8_t *)dmaL2Cache + ack_index);  // always display the notification on status screen
+    uint16_t index = ack_index;  // save the current index for further usage
 
-    if (infoSettings.notification_m117 == ENABLED)
+    if (ack_seen("Time Left"))
     {
-      addNotification(DIALOG_TYPE_INFO, (char*)echomagic, (char*)dmaL2Cache + ack_index, false);
+      parsePrintRemainingTime((char *)dmaL2Cache + ack_index);
     }
-
-    if (infoMenu.menu[infoMenu.cur] != menuStatus)  // don't show it when in menuStatus
+    else
     {
-      uint16_t index = ack_index;
+      statusScreen_setMsg((uint8_t *)echomagic, (uint8_t *)dmaL2Cache + index);  // always display the notification on status screen
 
       if (!ack_seen("Ready."))  // avoid to display unneeded/frequent useless notifications (e.g. "My printer Ready.")
-        addToast(DIALOG_TYPE_INFO, dmaL2Cache + index);
+      {
+        if (infoMenu.menu[infoMenu.cur] != menuStatus)  // don't show it when in menuStatus
+          addToast(DIALOG_TYPE_INFO, dmaL2Cache + index);
+
+        if (infoSettings.notification_m117 == ENABLED)
+          addNotification(DIALOG_TYPE_INFO, (char *)echomagic, (char *)dmaL2Cache + index, false);
+      }
     }
   }
   else if (ack_seen(":paused") || ack_seen(":pause"))
   {
+    if (ack_seen(":paused"))  // if paused with ADVANCED_PAUSE_FEATURE enabled in Marlin (:paused),
+      hostDialog = true;      // disable Resume/Pause button in the Printing menu
+    //else                      // otherwise, if ADVANCED_PAUSE_FEATURE is disabled in Marlin (:pause),
+    //  hostDialog = false;     // enable Resume/Pause button in the Printing menu
+
     // pass value "false" to let Marlin report when the host is not
     // printing (when notification ack "Not SD printing" is caught)
     setPrintPause(false, PAUSE_EXTERNAL);
@@ -269,6 +280,8 @@ void hostActionCommands(void)
   }
   else if (ack_seen(":resumed") || ack_seen(":resume"))
   {
+    hostDialog = false;  // enable Resume/Pause button in the Printing menu
+
     // pass value "true" to report the host is printing without waiting
     // from Marlin (when notification ack "SD printing byte" is caught)
     setPrintResume(true);
@@ -356,6 +369,13 @@ void parseACK(void)
     bool avoid_terminal = false;
     syncL2CacheFromL1(SERIAL_PORT);
     infoHost.rx_ok[SERIAL_PORT] = false;
+
+    #ifdef SERIAL_DEBUG_PORT
+      // dump raw serial data received to debug port
+      Serial_Puts(SERIAL_DEBUG_PORT, "<<");
+      Serial_Puts(SERIAL_DEBUG_PORT, dmaL2Cache);
+    #endif
+
     if (infoHost.connected == false)  // Not connected to printer
     {
       // parse error information even though not connected to printer
@@ -545,24 +565,14 @@ void parseACK(void)
       // parse and store M710, controller fan
       else if (ack_seen("M710"))
       {
-        uint8_t i = 0;
-        if (ack_seen("S"))
-        {
-          i = fanGetTypID(0, FAN_TYPE_CTRL_S);
-          fanSetCurSpeed(i, ack_value());
-          fanQuerySetWait(false);
-        }
-        if (ack_seen("I"))
-        {
-          i = fanGetTypID(0, FAN_TYPE_CTRL_I);
-          fanSetCurSpeed(i, ack_value());
-          fanQuerySetWait(false);
-        }
+        if (ack_seen("S")) fanSetCurSpeed(MAX_COOLING_FAN_COUNT, ack_value());
+        if (ack_seen("I")) fanSetCurSpeed(MAX_COOLING_FAN_COUNT + 1, ack_value());
+        ctrlFanQuerySetWait(false);
       }
       // parse pause message
       else if (!infoMachineSettings.promptSupport && ack_seen("paused for user"))
       {
-        setDialogText((u8*)"Printer is Paused", (u8*)"Paused for user\ncontinue?", LABEL_CONFIRM, LABEL_BACKGROUND);
+        setDialogText((uint8_t*)"Printer is Paused", (uint8_t*)"Paused for user\ncontinue?", LABEL_CONFIRM, LABEL_BACKGROUND);
         showDialog(DIALOG_TYPE_QUESTION, breakAndContinue, NULL, NULL);
       }
       // parse host action commands. Required "HOST_ACTION_COMMANDS" and other settings in Marlin
@@ -590,16 +600,16 @@ void parseACK(void)
       else if (infoMachineSettings.onboard_sd_support == ENABLED &&
                ack_seen(infoMachineSettings.firmwareType != FW_REPRAPFW ? "File opened:" : "job.file.fileName"))
       {
-        char *fileEndString;
+        char * fileEndString;
         if (infoMachineSettings.firmwareType != FW_REPRAPFW)
         {
           // Marlin
-          fileEndString = " Size:"; // File opened: 1A29A~1.GCO Size: 6974
+          fileEndString = " Size:";  // File opened: 1A29A~1.GCO Size: 6974
         }
         else
         {
           // RRF
-          ack_seen("result\":\"0:/gcodes/"); // {"key":"job.file.fileName","flags": "","result":"0:/gcodes/pig-4H.gcode"}
+          ack_seen("result\":\"0:/gcodes/");  // {"key":"job.file.fileName","flags": "","result":"0:/gcodes/pig-4H.gcode"}
           fileEndString = "\"";
         }
         uint16_t start_index = ack_index;
@@ -675,7 +685,7 @@ void parseACK(void)
         {
           sprintf (&tmpMsg[strlen(tmpMsg)], "\nRange: %0.5f", ack_value());
         }
-        setDialogText((u8* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
+        setDialogText((uint8_t* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
         showDialog(DIALOG_TYPE_INFO, NULL, NULL, NULL);
       }
       // parse M48, Standard Deviation
@@ -688,7 +698,7 @@ void parseACK(void)
         {
           SetLevelCornerPosition(4, ack_value());  // save value for Lever Corner display
           sprintf(tmpMsg, "%s\nStandard Deviation: %0.5f", (char *)getDialogMsgStr(), ack_value());
-          setDialogText((u8* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
+          setDialogText((uint8_t* )"Repeatability Test", (uint8_t *)tmpMsg, LABEL_CONFIRM, LABEL_BACKGROUND);
           showDialog(DIALOG_TYPE_INFO, NULL, NULL, NULL);
         }
       }
@@ -1073,6 +1083,10 @@ void parseACK(void)
           storeCmd("M155 ");
         }
       }
+      else if (ack_seen("Cap:AUTOREPORT_POS:"))
+      {
+        infoMachineSettings.autoReportPos = ack_value();
+      }
       else if (ack_seen("Cap:AUTOLEVEL:") && infoMachineSettings.leveling == BL_DISABLED)
       {
         infoMachineSettings.leveling = ack_value();
@@ -1120,6 +1134,10 @@ void parseACK(void)
       else if (ack_seen("Cap:BABYSTEPPING:"))
       {
         infoMachineSettings.babyStepping = ack_value();
+      }
+      else if (ack_seen("Cap:BUILD_PERCENT:"))  // M73 support. Required "LCD_SET_PROGRESS_MANUALLY" in Marlin
+      {
+        infoMachineSettings.buildPercent = ack_value();
       }
       else if (ack_seen("Cap:CHAMBER_TEMPERATURE:"))
       {
